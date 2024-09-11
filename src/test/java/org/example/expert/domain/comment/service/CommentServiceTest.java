@@ -6,7 +6,7 @@ import org.example.expert.domain.comment.entity.Comment;
 import org.example.expert.domain.comment.repository.CommentRepository;
 import org.example.expert.domain.common.dto.AuthUser;
 import org.example.expert.domain.common.exception.InvalidRequestException;
-import org.example.expert.domain.common.exception.ServerException;
+import org.example.expert.domain.manager.entity.Manager;
 import org.example.expert.domain.todo.entity.Todo;
 import org.example.expert.domain.todo.repository.TodoRepository;
 import org.example.expert.domain.user.entity.User;
@@ -16,7 +16,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -50,6 +52,34 @@ class CommentServiceTest {
 
         // then
         assertEquals("Todo not found", exception.getMessage());
+    }
+
+    @Test
+    public void comment_등록_중_할_일의_담당자가_아니기_때문에_에러가_발생한다() {
+        // given
+        CommentSaveRequest request = new CommentSaveRequest("contents");
+        long userId = 1;
+        AuthUser authUser = new AuthUser(userId, "email", UserRole.USER);
+        User user = User.fromAuthUser(authUser);
+        long todoId = 1;
+        Todo todo = new Todo("title", "title", "contents", user);
+        ReflectionTestUtils.setField(todo, "id", todoId);
+
+        long anotherUserId = 2;
+        AuthUser anotherAuthUser = new AuthUser(anotherUserId, "email", UserRole.USER);
+        User anotherUser = User.fromAuthUser(anotherAuthUser);
+        Manager manager = new Manager(anotherUser, todo);
+        ReflectionTestUtils.setField(todo, "managers", List.of(manager));
+
+        given(todoRepository.findById(anyLong())).willReturn(Optional.of(todo));
+
+        // when
+        InvalidRequestException exception = assertThrows(InvalidRequestException.class, () -> {
+            commentService.saveComment(authUser, todoId, request);
+        });
+
+        // then
+        assertEquals("Manager not found", exception.getMessage());
     }
 
     @Test
